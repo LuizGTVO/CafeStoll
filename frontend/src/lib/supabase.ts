@@ -18,6 +18,6 @@ export function getSupabaseAdmin(): SupabaseClient {
 // Backwards-compatible export (lazy proxy)
 export const supabaseAdmin = new Proxy({} as SupabaseClient, {
   get(_target, prop) {
-    return (getSupabaseAdmin() as Record<string | symbol, unknown>)[prop];
+    return (getSupabaseAdmin() as unknown as Record<string | symbol, unknown>)[prop];
   },
 });
