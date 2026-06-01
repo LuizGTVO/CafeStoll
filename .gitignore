@@ -1,0 +1,37 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+web_packages/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.docusaurus/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.sync.local
+
+# Databases and Prisma
+/backend/prisma/dev.db
+/backend/prisma/dev.db-journal
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.eslintcache
+
+# OS files
+.DS_Store
+Thumbs.db
