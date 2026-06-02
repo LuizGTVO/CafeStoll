@@ -228,7 +228,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                         Processando...
                       </>
                     ) : (
-                      'Finalizar Pedido (Simulação)'
+                      'Finalizar Pedido'
                     )}
                   </button>
                 </form>

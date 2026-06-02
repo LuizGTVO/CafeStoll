@@ -63,9 +63,9 @@ export default function Footer() {
 
           {/* Sched & Address */}
           <div className="md:col-span-4 space-y-4">
-            <h4 className="text-white font-serif font-bold text-base">Unidade Savassi</h4>
+            <h4 className="text-white font-serif font-bold text-base">Unidade Centro</h4>
             <p className="text-zinc-400 text-sm">
-              Rua das Flores, 123 - Savassi, Belo Horizonte - MG
+              Avenida da Praia, 456 - Centro, Caraguatatuba - SP
             </p>
             <div className="space-y-1 text-sm">
               <p><span className="text-zinc-500">Seg a Sáb:</span> 08:00 às 20:00</p>

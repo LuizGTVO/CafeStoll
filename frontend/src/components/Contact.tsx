@@ -23,12 +23,12 @@ export default function Contact() {
     {
       icon: <MapPin className="h-5 w-5 text-secondary" />,
       title: 'Endereço',
-      content: 'Rua das Flores, 123 - Savassi, Belo Horizonte - MG',
+      content: 'Avenida da Praia, 456 - Centro, Caraguatatuba - SP',
     },
     {
       icon: <Phone className="h-5 w-5 text-secondary" />,
       title: 'Telefone',
-      content: '(31) 3456-7890 / (31) 98765-4321',
+      content: '(12) 3456-7890 / (12) 98765-4321',
     },
     {
       icon: <Mail className="h-5 w-5 text-secondary" />,
