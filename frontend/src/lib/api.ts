@@ -18,11 +18,15 @@ export interface Product {
   isAvailable: boolean;
   categoryId: string;
   category?: Category;
+  prepTime?: string | null;
+  portion?: string | null;
+  ingredients?: string[];
+  allergens?: string[];
 }
 
 export async function getCategories(): Promise<Category[]> {
   const res = await fetch(`${API_BASE_URL}/categories`, {
-    next: { revalidate: 60 }
+    cache: 'no-store'
   });
   if (!res.ok) throw new Error('Failed to fetch categories');
   return res.json();
@@ -34,7 +38,7 @@ export async function getProducts(category?: string, featured?: boolean): Promis
   if (featured) params.append('featured', String(featured));
 
   const res = await fetch(`${API_BASE_URL}/products?${params.toString()}`, {
-    next: { revalidate: 60 }
+    cache: 'no-store'
   });
   if (!res.ok) throw new Error('Failed to fetch products');
   return res.json();

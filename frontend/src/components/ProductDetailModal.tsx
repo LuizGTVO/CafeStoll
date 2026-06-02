@@ -21,6 +21,22 @@ interface ProductMetadata {
 
 // Custom metadata mapping helper
 const getProductMetadata = (product: Product): ProductMetadata => {
+  // If product has real metadata from the database, use it!
+  const hasDbMetadata = 
+    (product.ingredients && product.ingredients.length > 0) || 
+    (product.allergens && product.allergens.length > 0) || 
+    product.prepTime;
+
+  if (hasDbMetadata) {
+    return {
+      ingredients: product.ingredients && product.ingredients.length > 0 ? product.ingredients : ['Ingredientes sob consulta'],
+      allergens: product.allergens && product.allergens.length > 0 ? product.allergens : ['Não especificado'],
+      prepTime: product.prepTime || '3-5 min',
+      rating: 4.9, // Standard high rating for brand-new products
+      reviewsCount: 12
+    };
+  }
+
   const name = product.name.toLowerCase();
   
   if (name.includes('espresso stoll')) {
@@ -366,7 +382,7 @@ export default function ProductDetailModal({ product, onClose }: ProductDetailMo
                         : 'border-border/60 hover:bg-muted text-foreground/80'
                     }`}
                   >
-                    Standard
+                    {product.portion || 'Standard'}
                   </button>
                   <button
                     onClick={() => setSelectedSize('large')}

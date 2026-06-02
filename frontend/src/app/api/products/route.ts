@@ -40,6 +40,29 @@ export async function POST(req: NextRequest) {
     const imageFile = formData.get('image') as File | null;
     let imageUrl = formData.get('imageUrl') as string || '';
 
+    const prepTime = formData.get('prepTime') as string || null;
+    const portion = formData.get('portion') as string || null;
+
+    let ingredients: string[] = [];
+    const ingredientsRaw = formData.get('ingredients') as string;
+    if (ingredientsRaw) {
+      try {
+        ingredients = JSON.parse(ingredientsRaw);
+      } catch {
+        ingredients = ingredientsRaw.split(',').map(i => i.trim()).filter(Boolean);
+      }
+    }
+
+    let allergens: string[] = [];
+    const allergensRaw = formData.get('allergens') as string;
+    if (allergensRaw) {
+      try {
+        allergens = JSON.parse(allergensRaw);
+      } catch {
+        allergens = allergensRaw.split(',').map(a => a.trim()).filter(Boolean);
+      }
+    }
+
     if (!name || !slug || !description || !price || !categoryId) {
       return NextResponse.json({ error: 'Campos obrigatórios ausentes' }, { status: 400 });
     }
@@ -71,7 +94,19 @@ export async function POST(req: NextRequest) {
     }
 
     const product = await prisma.product.create({
-      data: { name, slug, description, price, imageUrl, categoryId, isFeatured },
+      data: {
+        name,
+        slug,
+        description,
+        price,
+        imageUrl,
+        categoryId,
+        isFeatured,
+        prepTime,
+        portion,
+        ingredients,
+        allergens
+      },
     });
 
     return NextResponse.json({ message: 'Produto criado com sucesso!', product }, { status: 201 });

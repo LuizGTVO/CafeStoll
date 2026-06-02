@@ -41,6 +41,10 @@ model Product {
   imageUrl    String
   isFeatured  Boolean     @default(false)
   isAvailable Boolean     @default(true)
+  prepTime    String?
+  portion     String?
+  ingredients String[]
+  allergens   String[]
   categoryId  String
   category    Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   orderItems  OrderItem[]

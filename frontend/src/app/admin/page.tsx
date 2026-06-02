@@ -101,6 +101,18 @@ export default function AdminDashboard() {
   const [prodImageUrlFallback, setProdImageUrlFallback] = useState('');
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
 
+  // Custom metadata fields for portion/ingredients CRUD
+  const [prodPrepTime, setProdPrepTime] = useState('3-5 min');
+  const [showCustomPrepTimeInput, setShowCustomPrepTimeInput] = useState(false);
+  const [customPrepTimeText, setCustomPrepTimeText] = useState('');
+  const [prodPortion, setProdPortion] = useState('Standard');
+  const [prodIngredients, setProdIngredients] = useState<string[]>([]);
+  const [prodAllergens, setProdAllergens] = useState<string[]>([]);
+  const [customIngredient, setCustomIngredient] = useState('');
+  const [customAllergen, setCustomAllergen] = useState('');
+  const [showCustomPortionInput, setShowCustomPortionInput] = useState(false);
+  const [customPortionText, setCustomPortionText] = useState('');
+
   // Category Form State
   const [catName, setCatName] = useState('');
   const [catSlug, setCatSlug] = useState('');
@@ -203,8 +215,8 @@ export default function AdminDashboard() {
     const defaultEmail = 'admin@cafestoll.com';
 
     try {
-      // Direct call to authentication backend
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/auth/login`, {
+      // Call local Next.js auth endpoint
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: defaultEmail, password })
@@ -226,19 +238,8 @@ export default function AdminDashboard() {
       setIsLoggedIn(true);
       showToast('Login efetuado com sucesso!');
     } catch (err: any) {
-      console.warn('Backend login failure, falling back to mock authentication details', err);
-      // Simulate login for test credentials
-      if (password === 'admindono') {
-        const mockToken = 'mock-admin-session-jwt-token-val-999';
-        localStorage.setItem('cafeStollAdminToken', mockToken);
-        localStorage.setItem('cafeStollAdminEmail', defaultEmail);
-        setToken(mockToken);
-        setAdminEmail(defaultEmail);
-        setIsLoggedIn(true);
-        showToast('Login simulado efetuado com sucesso!');
-      } else {
-        setAuthError(err.message || 'Senha incorreta. Por favor insira a senha do administrador.');
-      }
+      console.error('Login failure:', err);
+      setAuthError(err.message || 'Senha incorreta. Por favor insira a senha do administrador.');
     } finally {
       setIsLoadingAuth(false);
     }
@@ -283,6 +284,27 @@ export default function AdminDashboard() {
     setProdIsFeatured(prod.isFeatured);
     setProdImageUrlFallback(prod.imageUrl);
     setProdImageFile(null);
+    
+    // Load metadata fields
+    const predefinedPrepTimes = ['Imediato', '2-3 min', '3-4 min', '5-7 min', '8-10 min', '10-12 min', '15 min', '20 min'];
+    const prepTimeVal = prod.prepTime || '3-5 min';
+    const isCustomPrep = !predefinedPrepTimes.includes(prepTimeVal);
+    setProdPrepTime(isCustomPrep ? 'Custom' : prepTimeVal);
+    setCustomPrepTimeText(isCustomPrep ? prepTimeVal : '');
+    setShowCustomPrepTimeInput(isCustomPrep);
+
+    const predefinedPortions = ['Standard', '100g', '150g', '200g', '250g', '50ml', '100ml', '150ml', '200ml', '250ml', '300ml', '350ml', '500ml', 'Individual', 'Para Compartilhar'];
+    const portionVal = prod.portion || 'Standard';
+    const isCustom = !predefinedPortions.includes(portionVal);
+    setProdPortion(isCustom ? 'Custom' : portionVal);
+    setCustomPortionText(isCustom ? portionVal : '');
+    setShowCustomPortionInput(isCustom);
+    
+    setProdIngredients(prod.ingredients || []);
+    setProdAllergens(prod.allergens || []);
+    setCustomIngredient('');
+    setCustomAllergen('');
+
     setIsProductModalOpen(true);
   };
 
@@ -297,6 +319,19 @@ export default function AdminDashboard() {
     setProdIsFeatured(false);
     setProdImageUrlFallback('');
     setProdImageFile(null);
+
+    // Reset metadata fields
+    setProdPrepTime('3-5 min');
+    setShowCustomPrepTimeInput(false);
+    setCustomPrepTimeText('');
+    setProdPortion('Standard');
+    setCustomPortionText('');
+    setShowCustomPortionInput(false);
+    setProdIngredients([]);
+    setProdAllergens([]);
+    setCustomIngredient('');
+    setCustomAllergen('');
+
     setIsProductModalOpen(true);
   };
 
@@ -318,6 +353,12 @@ export default function AdminDashboard() {
       formData.append('description', prodDescription);
       formData.append('isFeatured', String(prodIsFeatured));
       
+      // Append new metadata fields
+      formData.append('prepTime', showCustomPrepTimeInput ? customPrepTimeText : prodPrepTime);
+      formData.append('portion', showCustomPortionInput ? customPortionText : prodPortion);
+      formData.append('ingredients', JSON.stringify(prodIngredients));
+      formData.append('allergens', JSON.stringify(prodAllergens));
+      
       if (prodImageFile) {
         formData.append('image', prodImageFile);
       } else if (prodImageUrlFallback) {
@@ -328,13 +369,16 @@ export default function AdminDashboard() {
       if (editingProduct) {
         // Edit flow
         // To support clean RESTful edit with multipart, we submit a PUT request
-        const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/products/${editingProduct.id}`;
+        const url = `/api/products/${editingProduct.id}`;
         const res = await fetch(url, {
           method: 'PUT',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         });
-        if (!res.ok) throw new Error('Falha ao atualizar produto');
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Falha ao atualizar produto');
+        }
         result = await res.json();
         
         // Update local list
@@ -351,28 +395,7 @@ export default function AdminDashboard() {
       fetchDashboardData(); // Refresh list to ensure categories are resolved
     } catch (err: any) {
       console.error(err);
-      // Fallback local update if API fails (mock logic)
-      const mockResult: Product = {
-        id: editingProduct?.id || `prod-${Math.random().toString(36).substr(2, 9)}`,
-        name: prodName,
-        slug: prodSlug,
-        price: Number(prodPrice),
-        categoryId: prodCategoryId,
-        description: prodDescription,
-        isFeatured: prodIsFeatured,
-        isAvailable: true,
-        imageUrl: prodImageUrlFallback || 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=600&auto=format&fit=crop',
-        category: categories.find(c => c.id === prodCategoryId)
-      };
-
-      if (editingProduct) {
-        setProducts(prev => prev.map(p => p.id === editingProduct.id ? mockResult : p));
-        showToast('Produto atualizado localmente (Mock)');
-      } else {
-        setProducts(prev => [...prev, mockResult]);
-        showToast('Produto cadastrado localmente (Mock)');
-      }
-      setIsProductModalOpen(false);
+      showToast(err.message || 'Erro ao salvar produto no banco de dados.', true);
     } finally {
       setIsSubmittingProduct(false);
     }
@@ -390,13 +413,36 @@ export default function AdminDashboard() {
       await deleteProduct(productToDelete.id, token);
       setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
       showToast('Produto removido com sucesso!');
-    } catch (err) {
-      setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
-      showToast('Produto removido localmente (Mock)');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Erro ao remover produto do banco de dados.', true);
     } finally {
       setIsDeleteConfirmOpen(false);
       setProductToDelete(null);
     }
+  };
+
+  // Helper functions for metadata arrays in CRUD
+  const addIngredient = (ing: string) => {
+    const trimmed = ing.trim();
+    if (trimmed && !prodIngredients.includes(trimmed)) {
+      setProdIngredients(prev => [...prev, trimmed]);
+    }
+  };
+
+  const removeIngredient = (ing: string) => {
+    setProdIngredients(prev => prev.filter(i => i !== ing));
+  };
+
+  const addAllergen = (all: string) => {
+    const trimmed = all.trim();
+    if (trimmed && !prodAllergens.includes(trimmed)) {
+      setProdAllergens(prev => [...prev, trimmed]);
+    }
+  };
+
+  const removeAllergen = (all: string) => {
+    setProdAllergens(prev => prev.filter(a => a !== all));
   };
 
   // Create Category Submit
@@ -1773,6 +1819,241 @@ export default function AdminDashboard() {
                       Arquivo selecionado: {prodImageFile.name} (será carregado via Multer)
                     </p>
                   )}
+                </div>
+
+                {/* Metadados do Produto (Porção, Tempo de preparo, Ingredientes, Alergênicos) */}
+                <div className="border border-border/40 rounded-2xl p-5 bg-card space-y-6">
+                  <span className="text-xs font-bold text-muted-foreground block uppercase tracking-wider">Detalhes Adicionais (Ver Mais)</span>
+                  
+                  {/* Grid 2 Columns: Portion & Prep Time */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {/* Tamanho / Porção */}
+                    <div className="flex flex-col">
+                      <label className="text-xs font-bold text-muted-foreground block mb-1">Porção / Tamanho</label>
+                      <select
+                        value={prodPortion}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setProdPortion(val);
+                          if (val === 'Custom') {
+                            setShowCustomPortionInput(true);
+                          } else {
+                            setShowCustomPortionInput(false);
+                            setCustomPortionText('');
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 bg-background border border-border/80 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
+                      >
+                        <option value="Standard">Standard (Padrão)</option>
+                        <option value="Individual">Individual</option>
+                        <option value="Para Compartilhar">Para Compartilhar</option>
+                        <option value="100g">100g</option>
+                        <option value="150g">150g</option>
+                        <option value="200g">200g</option>
+                        <option value="250g">250g</option>
+                        <option value="50ml">50ml</option>
+                        <option value="100ml">100ml</option>
+                        <option value="150ml">150ml</option>
+                        <option value="200ml">200ml</option>
+                        <option value="250ml">250ml</option>
+                        <option value="300ml">300ml</option>
+                        <option value="350ml">350ml</option>
+                        <option value="500ml">500ml</option>
+                        <option value="Custom">Outro / Personalizado...</option>
+                      </select>
+                      {showCustomPortionInput && (
+                        <input
+                          type="text"
+                          placeholder="Digite a porção (ex: 120g, 400ml)"
+                          required={showCustomPortionInput}
+                          value={customPortionText}
+                          onChange={(e) => setCustomPortionText(e.target.value)}
+                          className="w-full px-4 py-2 bg-background border border-border/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-secondary text-xs mt-2"
+                        />
+                      )}
+                    </div>
+
+                    {/* Tempo de Preparo */}
+                    <div className="flex flex-col">
+                      <label className="text-xs font-bold text-muted-foreground block mb-1">Tempo de Preparo</label>
+                      <select
+                        value={prodPrepTime}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setProdPrepTime(val);
+                          if (val === 'Custom') {
+                            setShowCustomPrepTimeInput(true);
+                          } else {
+                            setShowCustomPrepTimeInput(false);
+                            setCustomPrepTimeText('');
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 bg-background border border-border/80 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-secondary"
+                      >
+                        <option value="Imediato">Imediato</option>
+                        <option value="2-3 min">2-3 min</option>
+                        <option value="3-4 min">3-4 min</option>
+                        <option value="5-7 min">5-7 min</option>
+                        <option value="8-10 min">8-10 min</option>
+                        <option value="10-12 min">10-12 min</option>
+                        <option value="15 min">15 min</option>
+                        <option value="20 min">20 min</option>
+                        <option value="Custom">Outro...</option>
+                      </select>
+                      {showCustomPrepTimeInput && (
+                        <input
+                          type="text"
+                          placeholder="Digite o tempo (ex: 25-30 min)"
+                          required={showCustomPrepTimeInput}
+                          value={customPrepTimeText}
+                          onChange={(e) => setCustomPrepTimeText(e.target.value)}
+                          className="w-full px-4 py-2 bg-background border border-border/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-secondary text-xs mt-2"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Ingredientes */}
+                  <div className="flex flex-col space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground block">Ingredientes</label>
+                    
+                    {/* Predefined ingredients pills */}
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-background/50 border border-border/40 rounded-xl max-h-32 overflow-y-auto">
+                      {['Grãos Arábica', 'Leite Vaporizado', 'Cacau', 'Limão Siciliano', 'Queijo Canastra', 'Ovos Caipiras', 'Manteiga', 'Amêndoas', 'Doce de Leite', 'Nozes', 'Farinha de Trigo', 'Avocado', 'Pão Levain'].map((ing) => {
+                        const isSelected = prodIngredients.includes(ing);
+                        return (
+                          <button
+                            type="button"
+                            key={ing}
+                            onClick={() => isSelected ? removeIngredient(ing) : addIngredient(ing)}
+                            className={`px-2.5 py-1 text-xs rounded-full border transition-all ${
+                              isSelected 
+                                ? 'bg-secondary/15 border-secondary text-secondary font-medium' 
+                                : 'border-border hover:bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {ing}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Selected ingredients list & Custom ingredient adding */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        placeholder="Adicionar ingrediente personalizado..."
+                        value={customIngredient}
+                        onChange={(e) => setCustomIngredient(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addIngredient(customIngredient);
+                          }
+                        }}
+                        className="flex-1 px-4 py-2 bg-background border border-border/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-secondary text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addIngredient(customIngredient)}
+                        className="px-3 py-2 bg-secondary text-secondary-foreground font-semibold rounded-xl text-xs hover:bg-secondary/90 transition-all"
+                      >
+                        + Adicionar
+                      </button>
+                    </div>
+
+                    {/* Active ingredients tags */}
+                    {prodIngredients.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {prodIngredients.map((ing) => (
+                          <span
+                            key={ing}
+                            className="inline-flex items-center gap-1 bg-muted/65 text-foreground px-2.5 py-1 rounded-lg text-xs border border-border/40"
+                          >
+                            {ing}
+                            <button
+                              type="button"
+                              onClick={() => removeIngredient(ing)}
+                              className="text-muted-foreground hover:text-destructive text-[10px] ml-0.5"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Alergênicos */}
+                  <div className="flex flex-col space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground block">Alergênicos & Alertas</label>
+                    
+                    {/* Predefined allergens pills */}
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-background/50 border border-border/40 rounded-xl max-h-32 overflow-y-auto">
+                      {['Contém glúten', 'Contém lactose', 'Contém ovos', 'Contém amêndoas', 'Contém nozes', 'Não contém glúten', 'Livre de lactose', 'Pode conter soja'].map((all) => {
+                        const isSelected = prodAllergens.includes(all);
+                        return (
+                          <button
+                            type="button"
+                            key={all}
+                            onClick={() => isSelected ? removeAllergen(all) : addAllergen(all)}
+                            className={`px-2.5 py-1 text-xs rounded-full border transition-all ${
+                              isSelected 
+                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-500 font-medium' 
+                                : 'border-border hover:bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {all}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Custom allergen input */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        placeholder="Adicionar alérgeno/alerta personalizado..."
+                        value={customAllergen}
+                        onChange={(e) => setCustomAllergen(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addAllergen(customAllergen);
+                          }
+                        }}
+                        className="flex-1 px-4 py-2 bg-background border border-border/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-secondary text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addAllergen(customAllergen)}
+                        className="px-3 py-2 bg-secondary text-secondary-foreground font-semibold rounded-xl text-xs hover:bg-secondary/90 transition-all"
+                      >
+                        + Adicionar
+                      </button>
+                    </div>
+
+                    {/* Active allergens tags */}
+                    {prodAllergens.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {prodAllergens.map((all) => (
+                          <span
+                            key={all}
+                            className="inline-flex items-center gap-1 bg-amber-500/5 text-amber-600 dark:text-amber-500 px-2.5 py-1 rounded-lg text-xs border border-amber-500/20"
+                          >
+                            {all}
+                            <button
+                              type="button"
+                              onClick={() => removeAllergen(all)}
+                              className="text-amber-500 hover:text-destructive text-[10px] ml-0.5"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Checkbox settings */}
