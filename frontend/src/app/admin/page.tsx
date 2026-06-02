@@ -43,6 +43,8 @@ import {
   createProductMultipart,
   deleteProduct,
   createCategory,
+  updateCategory,
+  deleteCategory,
   Product,
   Category,
   Order,
@@ -118,6 +120,9 @@ export default function AdminDashboard() {
   const [catSlug, setCatSlug] = useState('');
   const [catDescription, setCatDescription] = useState('');
   const [isSubmittingCategory, setIsSubmittingCategory] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [isDeleteCategoryConfirmOpen, setIsDeleteCategoryConfirmOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
 
   // Filters & Search
   const [prodSearch, setProdSearch] = useState('');
@@ -445,26 +450,85 @@ export default function AdminDashboard() {
     setProdAllergens(prev => prev.filter(a => a !== all));
   };
 
-  // Create Category Submit
+  // Category Action Handlers
+  const openEditCategory = (cat: Category) => {
+    setEditingCategory(cat);
+    setCatName(cat.name);
+    setCatSlug(cat.slug);
+    setCatDescription(cat.description || '');
+    setIsCategoryModalOpen(true);
+  };
+
+  const openAddCategory = () => {
+    setEditingCategory(null);
+    setCatName('');
+    setCatSlug('');
+    setCatDescription('');
+    setIsCategoryModalOpen(true);
+  };
+
+  const confirmDeleteCategory = (cat: Category) => {
+    setCategoryToDelete(cat);
+    setIsDeleteCategoryConfirmOpen(true);
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    try {
+      await deleteCategory(categoryToDelete.id, token);
+      setCategories(prev => prev.filter(c => c.id !== categoryToDelete.id));
+      showToast('Categoria removida com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Erro ao remover categoria do banco de dados.', true);
+    } finally {
+      setIsDeleteCategoryConfirmOpen(false);
+      setCategoryToDelete(null);
+    }
+  };
+
+  // Create or Update Category Submit
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!catName) return;
 
     setIsSubmittingCategory(true);
     try {
-      const newCat = await createCategory({
-        name: catName,
-        slug: catSlug,
-        description: catDescription
-      }, token);
+      if (editingCategory) {
+        // Edit flow
+        const updatedCat = await updateCategory(
+          editingCategory.id,
+          {
+            name: catName,
+            slug: catSlug,
+            description: catDescription
+          },
+          token
+        );
+        setCategories(prev => prev.map(c => c.id === editingCategory.id ? updatedCat : c));
+        setCatName('');
+        setCatDescription('');
+        setEditingCategory(null);
+        setIsCategoryModalOpen(false);
+        showToast('Categoria atualizada com sucesso!');
+      } else {
+        // Create flow
+        const newCat = await createCategory({
+          name: catName,
+          slug: catSlug,
+          description: catDescription
+        }, token);
 
-      setCategories(prev => [...prev, newCat]);
-      setCatName('');
-      setCatDescription('');
-      setIsCategoryModalOpen(false);
-      showToast('Categoria adicionada com sucesso!');
-    } catch (err) {
-      showToast('Erro ao criar categoria.', true);
+        setCategories(prev => [...prev, newCat]);
+        setCatName('');
+        setCatDescription('');
+        setIsCategoryModalOpen(false);
+        showToast('Categoria adicionada com sucesso!');
+      }
+      fetchDashboardData();
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Erro ao salvar categoria.', true);
     } finally {
       setIsSubmittingCategory(false);
     }
@@ -875,7 +939,7 @@ export default function AdminDashboard() {
 
             {activeTab === 'categories' && (
               <button
-                onClick={() => setIsCategoryModalOpen(true)}
+                onClick={openAddCategory}
                 className="px-4 py-2 bg-secondary text-secondary-foreground text-xs font-bold rounded-xl hover:bg-secondary/90 transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
               >
                 <Plus className="h-4 w-4" />
@@ -1227,6 +1291,7 @@ export default function AdminDashboard() {
                       <th className="px-6 py-4">Slug</th>
                       <th className="px-6 py-4">Descrição</th>
                       <th className="px-6 py-4 text-center">Itens Vinculados</th>
+                      <th className="px-6 py-4 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/30">
@@ -1238,15 +1303,35 @@ export default function AdminDashboard() {
                         <td className="px-6 py-4 text-center font-mono font-bold text-foreground">
                           {products.filter(p => p.categoryId === cat.id).length}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => openEditCategory(cat)}
+                              className="p-2 border border-border hover:bg-muted hover:text-foreground text-muted-foreground rounded-xl transition-all"
+                              title="Editar"
+                            >
+                              <Edit className="h-4.5 w-4.5" />
+                            </button>
+                            <button
+                              onClick={() => confirmDeleteCategory(cat)}
+                              className="p-2 border border-destructive/20 hover:bg-destructive/10 text-destructive/80 hover:text-destructive rounded-xl transition-all"
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-4.5 w-4.5" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {/* Quick inline Category creation form */}
+              {/* Quick inline Category creation/editing form */}
               <div className="bg-card border border-border/40 p-6 rounded-3xl shadow-sm space-y-4 self-start">
-                <h3 className="font-serif font-bold text-lg">Criar Categoria</h3>
+                <h3 className="font-serif font-bold text-lg">
+                  {editingCategory ? 'Editar Categoria' : 'Criar Categoria'}
+                </h3>
                 <form onSubmit={handleCategorySubmit} className="space-y-4">
                   <div>
                     <label className="text-xs font-bold text-muted-foreground block mb-1">Nome da Categoria</label>
@@ -1282,20 +1367,31 @@ export default function AdminDashboard() {
                     />
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isSubmittingCategory || !catName}
-                    className="w-full py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/95 transition-all text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
-                  >
-                    {isSubmittingCategory ? (
-                      <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                    ) : (
-                      <>
-                        <Plus className="h-4 w-4" />
-                        Cadastrar Categoria
-                      </>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingCategory || !catName}
+                      className="w-full py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/95 transition-all text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
+                    >
+                      {isSubmittingCategory ? (
+                        <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          {editingCategory ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                          {editingCategory ? 'Salvar Alterações' : 'Cadastrar Categoria'}
+                        </>
+                      )}
+                    </button>
+                    {editingCategory && (
+                      <button
+                        type="button"
+                        onClick={openAddCategory}
+                        className="w-full py-2 border border-border hover:bg-muted text-muted-foreground rounded-xl transition-all text-xs text-center font-semibold"
+                      >
+                        Cancelar Edição
+                      </button>
                     )}
-                  </button>
+                  </div>
                 </form>
               </div>
 
@@ -2144,6 +2240,53 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
 
+      {/* CONFIRM DELETE CATEGORY MODAL */}
+      <AnimatePresence>
+        {isDeleteCategoryConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteCategoryConfirmOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 10, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 10, opacity: 0 }}
+              className="bg-card border border-border/50 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative z-10 space-y-4"
+            >
+              <div className="flex items-start gap-3 text-destructive">
+                <AlertTriangle className="h-6 w-6 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-foreground text-sm">Excluir Categoria?</h4>
+                  <p className="text-xs text-muted-foreground font-light leading-relaxed">
+                    Você tem certeza que deseja excluir a categoria <strong className="text-foreground">{categoryToDelete?.name}</strong>? Esta ação removerá a categoria. Ela não pode possuir produtos vinculados para ser excluída.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setIsDeleteCategoryConfirmOpen(false)}
+                  className="px-4 py-2 border border-border hover:bg-muted text-xs font-semibold rounded-lg transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteCategory}
+                  className="px-4 py-2 bg-destructive text-destructive-foreground hover:bg-destructive/95 text-xs font-semibold rounded-lg transition-all shadow"
+                >
+                  Excluir Categoria
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* INLINE CATEGORY CREATION MODAL */}
       <AnimatePresence>
         {isCategoryModalOpen && (
@@ -2163,7 +2306,9 @@ export default function AdminDashboard() {
               className="bg-card border border-border/50 rounded-2xl w-full max-w-md p-6 shadow-2xl relative z-10 space-y-4"
             >
               <div className="flex items-center justify-between border-b border-border/40 pb-3">
-                <h4 className="font-serif font-bold text-base text-foreground">Nova Categoria</h4>
+                <h4 className="font-serif font-bold text-base text-foreground">
+                  {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
+                </h4>
                 <button
                   onClick={() => setIsCategoryModalOpen(false)}
                   className="p-1 border border-border hover:bg-muted rounded-lg transition-all"
@@ -2223,8 +2368,8 @@ export default function AdminDashboard() {
                       <div className="w-3.5 h-3.5 border-2 border-secondary-foreground/30 border-t-secondary-foreground rounded-full animate-spin" />
                     ) : (
                       <>
-                        <Plus className="h-4.5 w-4.5" />
-                        Criar Categoria
+                        {editingCategory ? <Check className="h-4.5 w-4.5" /> : <Plus className="h-4.5 w-4.5" />}
+                        {editingCategory ? 'Salvar Alterações' : 'Criar Categoria'}
                       </>
                     )}
                   </button>

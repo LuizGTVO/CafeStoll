@@ -132,6 +132,40 @@ export async function createCategory(
   return res.json();
 }
 
+export async function updateCategory(
+  id: string,
+  data: { name: string; slug: string; description?: string },
+  token: string
+): Promise<Category> {
+  const res = await fetch(`${API_BASE_URL}/categories/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || 'Failed to update category');
+  }
+  return res.json();
+}
+
+export async function deleteCategory(id: string, token: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/categories/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || 'Failed to delete category');
+  }
+  return res.json();
+}
+
 export async function getAdminOrders(token: string): Promise<Order[]> {
   const res = await fetch(`${API_BASE_URL}/orders`, {
     headers: {
